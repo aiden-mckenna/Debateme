@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Debate.me — The Competitive Debate Platform</title>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #1a1a2e; --sidebar-bg: #12122a; --purple: #7c3aed;
+      --purple-mid: #9f67f5; --purple-light: #c4a7f7;
+      --purple-pale: rgba(124,58,237,0.15); --cream: #f0e6d3;
+      --text: #e8e0f0; --text-muted: #8878a8;
+      --green: #0ea472; --red: #e05252;
+      --card-bg: #1e1e38; --card-border: rgba(124,58,237,0.15);
+    }
+    body {
+      font-family: 'Nunito', sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; display: flex;
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 200px; background: var(--sidebar-bg);
+      display: flex; flex-direction: column;
+      position: fixed; top: 0; left: 0; bottom: 0;
+      border-right: 1px solid rgba(124,58,237,0.15);
+    }
+    .sidebar-logo { padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .logo-text { font-size: 1.5rem; font-weight: 900; color: var(--purple-light); }
+    .logo-text span { color: var(--cream); }
+    .logo-tag { font-size: 0.68rem; color: var(--text-muted); margin-top: 3px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+    .sidebar-nav { flex: 1; padding: 16px 0; display: flex; flex-direction: column; gap: 2px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 11px 20px; color: var(--text-muted);
+      text-decoration: none; font-size: 0.92rem; font-weight: 600;
+      transition: all 0.18s; cursor: pointer; position: relative;
+    }
+    .nav-item:hover { color: var(--text); background: rgba(124,58,237,0.12); }
+    .nav-item.active { color: var(--cream); background: rgba(124,58,237,0.18); }
+
+    /* Small geometric icon instead of emoji */
+    .nav-icon {
+      width: 20px; height: 20px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-icon svg { width: 17px; height: 17px; opacity: 0.6; transition: opacity 0.18s; }
+    .nav-item:hover .nav-icon svg,
+    .nav-item.active .nav-icon svg { opacity: 1; }
+
+    /* Forum dropdown */
+    .nav-item.has-dropdown { flex-wrap: wrap; }
+    .dropdown-arrow {
+      margin-left: auto; font-size: 0.65rem; transition: transform 0.22s;
+      opacity: 0.5;
+    }
+    .nav-item.has-dropdown.open .dropdown-arrow { transform: rotate(180deg); }
+    .forum-dropdown {
+      width: 100%; overflow: hidden; max-height: 0;
+      transition: max-height 0.28s ease; background: rgba(0,0,0,0.18);
+    }
+    .forum-dropdown.open { max-height: 260px; }
+    .forum-sub {
+      display: block; padding: 8px 20px 8px 52px;
+      font-size: 0.82rem; font-weight: 600; color: var(--text-muted);
+      cursor: pointer; transition: all 0.15s; text-decoration: none;
+    }
+    .forum-sub:hover { color: var(--purple-light); background: rgba(124,58,237,0.08); }
+    .sidebar-bottom {
+      padding: 16px; border-top: 1px solid rgba(255,255,255,0.06);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .btn-signup {
+      background: var(--purple); color: #fff; padding: 10px 16px;
+      border-radius: 10px; font-family: 'Nunito', sans-serif;
+      font-size: 0.88rem; font-weight: 800; text-align: center;
+      border: none; cursor: pointer; transition: background 0.2s;
+      display: block; text-decoration: none;
+    }
+    .btn-signup:hover { background: var(--purple-mid); }
+    .btn-login {
+      background: rgba(255,255,255,0.07); color: var(--text);
+      padding: 10px 16px; border-radius: 10px;
+      font-family: 'Nunito', sans-serif; font-size: 0.88rem; font-weight: 700;
+      text-align: center; border: none; cursor: pointer;
+      transition: background 0.2s; display: block;
+    }
+    .btn-login:hover { background: rgba(255,255,255,0.12); }
+
+    /* ── MAIN ── */
+    .main { margin-left: 200px; flex: 1; display: flex; flex-direction: column; }
+
+    /* ── HERO ── */
+    .hero {
+      display: flex; align-items: center; justify-content: center;
+      gap: 60px; padding: 48px 60px; min-height: 100vh;
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 70% at 40% 50%, rgba(124,58,237,0.07) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Debate visual */
+    .debate-visual { width: 480px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; }
+    .stage-svg { width: 100%; height: auto; filter: drop-shadow(0 20px 60px rgba(124,58,237,0.22)); }
+    .live-match {
+      margin-top: 18px; background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(124,58,237,0.25); border-radius: 14px;
+      padding: 16px 18px; width: 100%; display: flex; flex-direction: column; gap: 10px;
+    }
+    .live-header { display: flex; justify-content: space-between; align-items: center; }
+    .live-badge { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 800; color: #ff6b6b; text-transform: uppercase; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #ff6b6b; animation: blink 1.2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+    .live-topic { font-size: 0.72rem; color: var(--purple-light); font-weight: 700; text-transform: uppercase; background: var(--purple-pale); padding: 3px 10px; border-radius: 50px; }
+    .live-claim { font-size: 0.9rem; font-weight: 700; color: var(--cream); line-height: 1.4; }
+    .live-players { display: flex; justify-content: space-between; align-items: center; }
+    .lp { display: flex; align-items: center; gap: 8px; }
+    .lp-avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.72rem; color: #fff; flex-shrink: 0; }
+    .lp-a { background: linear-gradient(135deg, #7c3aed, #9f67f5); }
+    .lp-b { background: linear-gradient(135deg, #0ea472, #34d399); }
+    .lp-name { font-size: 0.8rem; font-weight: 700; }
+    .lp-elo  { font-size: 0.68rem; color: var(--text-muted); }
+    .vs-sm { font-size: 0.72rem; font-weight: 900; color: var(--text-muted); background: rgba(255,255,255,0.06); padding: 3px 7px; border-radius: 5px; }
+    .live-timer-row { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.22); border-radius: 8px; padding: 7px 12px; }
+    .lt-label { font-size: 0.7rem; color: var(--text-muted); font-weight: 600; }
+    .lt-time  { font-size: 1rem; font-weight: 900; color: #f5c842; font-variant-numeric: tabular-nums; }
+    .lt-round { font-size: 0.7rem; color: var(--purple-light); font-weight: 700; }
+
+    /* Hero text */
+    .hero-text { max-width: 420px; position: relative; z-index: 1; }
+    .hero-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--purple-pale); border: 1px solid rgba(124,58,237,0.3);
+      color: var(--purple-light); padding: 5px 14px; border-radius: 50px;
+      font-size: 0.75rem; font-weight: 800; letter-spacing: 0.06em;
+      text-transform: uppercase; margin-bottom: 22px;
+    }
+    h1 { font-size: clamp(2.2rem, 4vw, 3.2rem); font-weight: 900; line-height: 1.1; color: var(--cream); letter-spacing: -0.5px; }
+    h1 .hl { color: var(--purple-light); }
+    .hero-sub { margin-top: 16px; font-size: 0.98rem; line-height: 1.7; color: var(--text-muted); font-weight: 500; }
+    .hero-cta { margin-top: 28px; display: flex; flex-direction: column; gap: 10px; }
+    .cta-main {
+      background: var(--purple); color: #fff; padding: 14px 28px;
+      border-radius: 12px; font-family: 'Nunito', sans-serif;
+      font-size: 1rem; font-weight: 800; text-decoration: none;
+      border: none; cursor: pointer; transition: all 0.2s;
+      box-shadow: 0 4px 20px rgba(124,58,237,0.4); text-align: center; display: block;
+    }
+    .cta-main:hover { background: var(--purple-mid); transform: translateY(-2px); }
+    .cta-sub {
+      background: rgba(255,255,255,0.07); color: var(--text);
+      padding: 14px 28px; border-radius: 12px; font-family: 'Nunito', sans-serif;
+      font-size: 0.95rem; font-weight: 700; border: none; cursor: pointer;
+      transition: background 0.2s; text-align: center; display: block;
+    }
+    .cta-sub:hover { background: rgba(255,255,255,0.12); }
+    .hero-stats { margin-top: 32px; display: flex; gap: 26px; }
+    .hstat-val { font-size: 1.4rem; font-weight: 900; color: var(--purple-light); line-height: 1; }
+    .hstat-label { font-size: 0.73rem; color: var(--text-muted); font-weight: 600; }
+
+    /* Bottom strip */
+    .bottom-strip {
+      background: var(--sidebar-bg); border-top: 1px solid rgba(124,58,237,0.12);
+      padding: 36px 60px; display: grid; grid-template-columns: repeat(4,1fr); gap: 18px;
+    }
+    .strip-card {
+      display: flex; align-items: flex-start; gap: 12px; padding: 18px;
+      background: rgba(255,255,255,0.03); border-radius: 13px;
+      border: 1px solid rgba(124,58,237,0.1); cursor: pointer; transition: all 0.2s;
+    }
+    .strip-card:hover { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.25); transform: translateY(-2px); }
+    .strip-icon { font-size: 1.7rem; line-height: 1; flex-shrink: 0; }
+    .strip-title { font-size: 0.9rem; font-weight: 800; color: var(--cream); margin-bottom: 3px; }
+    .strip-desc  { font-size: 0.76rem; color: var(--text-muted); line-height: 1.5; font-weight: 500; }
+
+    /* ── AUTH MODAL ── */
+    .auth-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.75); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center;
+    }
+    .auth-overlay.open { display: flex; }
+    .auth-modal {
+      background: var(--card-bg); border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 22px; padding: 36px; width: 100%; max-width: 420px;
+      animation: pop-in 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes pop-in { from{opacity:0;transform:scale(0.9)} to{opacity:1;transform:scale(1)} }
+
+    .auth-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.04); border-radius: 10px; padding: 4px; margin-bottom: 24px; }
+    .auth-tab {
+      flex: 1; padding: 9px; border-radius: 7px; border: none;
+      font-family: 'Nunito', sans-serif; font-size: 0.88rem; font-weight: 700;
+      cursor: pointer; transition: all 0.18s; color: var(--text-muted); background: none;
+    }
+    .auth-tab.active { background: var(--purple); color: #fff; }
+
+    .auth-title { font-size: 1.3rem; font-weight: 900; color: var(--cream); margin-bottom: 6px; }
+    .auth-sub   { font-size: 0.84rem; color: var(--text-muted); font-weight: 600; margin-bottom: 22px; }
+
+    .field-label { font-size: 0.75rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 7px; }
+    .field-wrap  { margin-bottom: 16px; }
+    .auth-input {
+      width: 100%; background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(124,58,237,0.22); border-radius: 10px;
+      padding: 12px 15px; color: var(--text);
+      font-family: 'Nunito', sans-serif; font-size: 0.92rem; font-weight: 600;
+      outline: none; transition: border-color 0.2s;
+    }
+    .auth-input:focus { border-color: var(--purple); }
+
+    .auth-submit {
+      width: 100%; background: var(--purple); color: #fff;
+      border: none; border-radius: 10px; padding: 13px;
+      font-family: 'Nunito', sans-serif; font-size: 0.95rem; font-weight: 800;
+      cursor: pointer; transition: background 0.2s; margin-top: 4px;
+    }
+    .auth-submit:hover { background: var(--purple-mid); }
+    .auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .auth-msg {
+      margin-top: 14px; padding: 10px 14px; border-radius: 9px;
+      font-size: 0.82rem; font-weight: 700; display: none;
+    }
+    .auth-msg.error { background: rgba(224,82,82,0.13); color: var(--red); border: 1px solid rgba(224,82,82,0.22); display: block; }
+    .auth-msg.success { background: rgba(14,164,114,0.13); color: var(--green); border: 1px solid rgba(14,164,114,0.22); display: block; }
+
+    .auth-close {
+      position: absolute; top: 16px; right: 20px;
+      background: none; border: none; color: var(--text-muted);
+      font-size: 1.2rem; cursor: pointer; padding: 4px;
+    }
+    .auth-modal { position: relative; }
+  </style>
+</head>
+<body>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-text">Debate<span>.me</span></div>
+      <div class="logo-tag">Compete · Argue · Improve</div>
+    </div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </span>
+        Play
+      </a>
+      <a class="nav-item" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        </span>
+        Learn
+      </a>
+      <a class="nav-item" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+        </span>
+        Watch
+      </a>
+      <div class="nav-item has-dropdown" id="forumNavItem" onclick="toggleForum()">
+        <span class="nav-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </span>
+        Forum
+        <span class="dropdown-arrow" id="forumArrow">▼</span>
+      </div>
+      <div class="forum-dropdown" id="forumDropdown">
+        <a class="forum-sub" href="#">Politics</a>
+        <a class="forum-sub" href="#">Philosophy</a>
+        <a class="forum-sub" href="#">Sports</a>
+        <a class="forum-sub" href="#">Religion</a>
+        <a class="forum-sub" href="#">Science</a>
+        <a class="forum-sub" href="#">Nutrition &amp; Fitness</a>
+        <a class="forum-sub" href="#">Media &amp; Culture</a>
+        <a class="forum-sub" href="#">Other</a>
+      </div>
+    </nav>
+    <div class="sidebar-bottom">
+      <button class="btn-signup" onclick="openAuth('signup')">Sign Up — Free</button>
+      <button class="btn-login"  onclick="openAuth('login')">Log In</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <section class="hero">
+      <div class="debate-visual">
+        <svg class="stage-svg" viewBox="0 0 560 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+
+          <!-- floor glow -->
+          <ellipse cx="152" cy="308" rx="120" ry="10" fill="rgba(124,58,237,0.2)"/>
+          <ellipse cx="408" cy="308" rx="120" ry="10" fill="rgba(14,164,114,0.18)"/>
+
+          <!-- LEFT PODIUM — large solid block matching reference -->
+          <rect x="48" y="175" width="156" height="135" rx="3" fill="#4a27a0"/>
+          <rect x="40" y="167" width="172" height="16" rx="3" fill="#5e33c4"/>
+
+          <!-- LEFT DEBATER silhouette — arm raised, pointing up/right -->
+          <!-- body/suit -->
+          <path d="M92 68 Q92 48 128 45 Q164 48 164 68 L172 167 Q150 176 128 176 Q106 176 84 167 Z" fill="#4a27a0"/>
+          <!-- head -->
+          <ellipse cx="128" cy="30" rx="24" ry="26" fill="#4a27a0"/>
+          <!-- neck -->
+          <rect x="120" y="50" width="16" height="20" fill="#4a27a0"/>
+          <!-- RIGHT arm — raised high, pointing diagonally up toward opponent -->
+          <path d="M162 78 Q180 52 200 28 Q207 20 215 25 Q220 32 214 40 Q194 62 172 92 Z" fill="#4a27a0"/>
+          <!-- finger tip -->
+          <ellipse cx="217" cy="23" rx="7" ry="6" fill="#4a27a0"/>
+          <rect x="215" y="10" width="6" height="16" rx="3" transform="rotate(15,218,18)" fill="#4a27a0"/>
+          <!-- LEFT arm resting on podium -->
+          <path d="M94 95 Q74 122 70 158 Q70 168 80 168 Q90 163 90 152 Q94 126 108 100 Z" fill="#4a27a0"/>
+          <!-- collar v-shape -->
+          <path d="M118 52 L128 72 L115 95 L106 74 Z" fill="#5e33c4" opacity="0.75"/>
+          <path d="M138 52 L128 72 L141 95 L150 74 Z" fill="#5e33c4" opacity="0.75"/>
+          <!-- tie -->
+          <path d="M125 70 L128 70 L131 70 L130 145 L128 151 L126 145 Z" fill="#6b3de0"/>
+
+          <!-- RIGHT PODIUM -->
+          <rect x="356" y="175" width="156" height="135" rx="3" fill="#0b5438"/>
+          <rect x="348" y="167" width="172" height="16" rx="3" fill="#0e6844"/>
+
+          <!-- RIGHT DEBATER silhouette — attentive, leaning slightly toward opponent -->
+          <path d="M358 68 Q358 48 394 45 Q430 48 430 68 L438 167 Q416 176 394 176 Q372 176 350 167 Z" fill="#0b5438"/>
+          <ellipse cx="391" cy="30" rx="24" ry="26" fill="#0b5438"/>
+          <rect x="383" y="50" width="16" height="20" fill="#0b5438"/>
+          <!-- left arm leaning on podium -->
+          <path d="M360 95 Q340 122 336 158 Q336 168 346 168 Q356 163 356 152 Q360 126 374 100 Z" fill="#0b5438"/>
+          <!-- right arm tucked -->
+          <path d="M428 90 Q450 105 462 132 Q466 142 458 145 Q450 140 438 118 Q428 103 424 95 Z" fill="#0b5438"/>
+          <!-- collar -->
+          <path d="M383 52 L393 72 L380 95 L371 74 Z" fill="#0e6844" opacity="0.75"/>
+          <path d="M403 52 L393 72 L406 95 L415 74 Z" fill="#0e6844" opacity="0.75"/>
+          <!-- tie -->
+          <path d="M390 70 L393 70 L396 70 L395 145 L393 151 L391 145 Z" fill="#11804f"/>
+
+          <!-- CENTER DIVIDER -->
+          <line x1="280" y1="5" x2="280" y2="312" stroke="rgba(124,58,237,0.28)" stroke-width="1.5" stroke-dasharray="7 5"/>
+          <circle cx="280" cy="165" r="17" fill="rgba(124,58,237,0.18)" stroke="rgba(124,58,237,0.5)" stroke-width="1.5"/>
+          <text x="280" y="171" text-anchor="middle" fill="#c4a7f7" font-size="11" font-weight="900" font-family="Nunito,sans-serif">VS</text>
+
+          <!-- SPEECH BUBBLES -->
+          <rect x="18" y="14" width="152" height="48" rx="12" fill="rgba(124,58,237,0.2)" stroke="rgba(124,58,237,0.55)" stroke-width="1.5"/>
+          <polygon points="78,62 64,80 96,62" fill="rgba(124,58,237,0.2)" stroke="rgba(124,58,237,0.55)" stroke-width="1.2"/>
+          <text x="94" y="37" text-anchor="middle" fill="#c4a7f7" font-size="10" font-weight="700" font-family="Nunito,sans-serif">"The evidence</text>
+          <text x="94" y="52" text-anchor="middle" fill="#c4a7f7" font-size="10" font-weight="700" font-family="Nunito,sans-serif">clearly shows..."</text>
+
+          <rect x="390" y="14" width="152" height="48" rx="12" fill="rgba(14,164,114,0.16)" stroke="rgba(14,164,114,0.5)" stroke-width="1.5"/>
+          <polygon points="448,62 434,80 466,62" fill="rgba(14,164,114,0.16)" stroke="rgba(14,164,114,0.5)" stroke-width="1.2"/>
+          <text x="466" y="37" text-anchor="middle" fill="#6ee7b7" font-size="10" font-weight="700" font-family="Nunito,sans-serif">"That's a straw</text>
+          <text x="466" y="52" text-anchor="middle" fill="#6ee7b7" font-size="10" font-weight="700" font-family="Nunito,sans-serif">man fallacy..."</text>
+        </svg>
+
+        <div class="live-match">
+          <div class="live-header">
+            <span class="live-badge"><span class="live-dot"></span>Live Now</span>
+            <span class="live-topic">Philosophy</span>
+          </div>
+          <div class="live-claim">"Free will cannot exist in a deterministic universe."</div>
+          <div class="live-players">
+            <div class="lp"><div class="lp-avatar lp-a">AK</div><div><div class="lp-name">Alex K.</div><div class="lp-elo">1,842 · Gold</div></div></div>
+            <div class="vs-sm">VS</div>
+            <div class="lp"><div class="lp-avatar lp-b">MR</div><div><div class="lp-name">Maya R.</div><div class="lp-elo">1,790 · Gold</div></div></div>
+          </div>
+          <div class="live-timer-row">
+            <span class="lt-label">Time remaining</span>
+            <span class="lt-time" id="heroTimer">07:34</span>
+            <span class="lt-round">Round 2 of 4</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-text">
+        <div class="hero-eyebrow">🎯 Now in Beta</div>
+        <h1>The <span class="hl">Competitive</span><br>Debate Platform</h1>
+        <p class="hero-sub">Post a claim. Get matched by skill. Argue in structured turns. An AI judge scores every argument on logic alone.</p>
+        <div class="hero-cta">
+          <button class="cta-main" onclick="openAuth('signup')">Start Debating — It's Free</button>
+          <button class="cta-sub" onclick="openAuth('login')">Already have an account? Log in</button>
+        </div>
+        <div class="hero-stats">
+          <div class="hstat"><div class="hstat-val">ELO</div><div class="hstat-label">Skill Ranking</div></div>
+          <div class="hstat"><div class="hstat-val">AI</div><div class="hstat-label">Objective Judge</div></div>
+          <div class="hstat"><div class="hstat-val">8+</div><div class="hstat-label">Categories</div></div>
+          <div class="hstat"><div class="hstat-val">4</div><div class="hstat-label">Rounds / Match</div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="bottom-strip">
+      <div class="strip-card">
+        <div class="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;color:var(--purple-light)"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+        <div><div class="strip-title">Play</div><div class="strip-desc">Jump into ranked. Post a claim or enter the queue.</div></div>
+      </div>
+      <div class="strip-card">
+        <div class="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;color:var(--purple-light)"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
+        <div><div class="strip-title">Learn</div><div class="strip-desc">Master fallacies, rhetoric, and argument structure.</div></div>
+      </div>
+      <div class="strip-card">
+        <div class="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;color:var(--purple-light)"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></div>
+        <div><div class="strip-title">Watch</div><div class="strip-desc">Spectate live ranked debates. Learn from the best.</div></div>
+      </div>
+      <div class="strip-card">
+        <div class="strip-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:30px;height:30px;color:var(--purple-light)"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+        <div><div class="strip-title">Forum</div><div class="strip-desc">Browse debates by topic — politics, philosophy, sports and more.</div></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- AUTH MODAL -->
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-modal">
+      <button class="auth-close" onclick="closeAuth()">✕</button>
+
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabSignup" onclick="switchAuthTab('signup')">Sign Up</button>
+        <button class="auth-tab" id="tabLogin" onclick="switchAuthTab('login')">Log In</button>
+      </div>
+
+      <!-- SIGN UP -->
+      <div id="signupForm">
+        <div class="auth-title">Create your account</div>
+        <div class="auth-sub">Join Debate.me and start climbing the ranks.</div>
+        <div class="field-wrap">
+          <div class="field-label">Username</div>
+          <input class="auth-input" id="signupUsername" type="text" placeholder="e.g. LogicLord" maxlength="20" />
+        </div>
+        <div class="field-wrap">
+          <div class="field-label">Email</div>
+          <input class="auth-input" id="signupEmail" type="email" placeholder="you@email.com" />
+        </div>
+        <div class="field-wrap">
+          <div class="field-label">Password</div>
+          <input class="auth-input" id="signupPassword" type="password" placeholder="At least 8 characters" />
+        </div>
+        <button class="auth-submit" id="signupBtn" onclick="handleSignup()">Create Account →</button>
+        <div class="auth-msg" id="signupMsg"></div>
+      </div>
+
+      <!-- LOG IN -->
+      <div id="loginForm" style="display:none;">
+        <div class="auth-title">Welcome back</div>
+        <div class="auth-sub">Log in to continue your ranked journey.</div>
+        <div class="field-wrap">
+          <div class="field-label">Email</div>
+          <input class="auth-input" id="loginEmail" type="email" placeholder="you@email.com" />
+        </div>
+        <div class="field-wrap">
+          <div class="field-label">Password</div>
+          <input class="auth-input" id="loginPassword" type="password" placeholder="Your password" />
+        </div>
+        <button class="auth-submit" id="loginBtn" onclick="handleLogin()">Log In →</button>
+        <div class="auth-msg" id="loginMsg"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // ── FORUM DROPDOWN ──
+    function toggleForum() {
+      const item   = document.getElementById('forumNavItem');
+      const dd     = document.getElementById('forumDropdown');
+      const arrow  = document.getElementById('forumArrow');
+      const isOpen = dd.classList.contains('open');
+      dd.classList.toggle('open', !isOpen);
+      arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+      item.classList.toggle('active', !isOpen);
+    }
+
+    // ── SUPABASE INIT ──
+    const { createClient } = supabase;
+    const sb = createClient(
+      'https://csoltlizkbvdrcmzcmay.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNzb2x0bGl6a2J2ZHJjbXpjbWF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIwNzcyNTYsImV4cCI6MjA4NzY1MzI1Nn0.wLj5j46NTu3fqOgAWvmv21AzpeRn7lgXv3EAfRI4Plw'
+    );
+
+    // ── CHECK SESSION ON LOAD ──
+    // If already logged in, send straight to dashboard
+    (async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) window.location.href = 'dashboard.html';
+    })();
+
+    // ── TIMER ──
+    let t = 7*60+34;
+    const tEl = document.getElementById('heroTimer');
+    setInterval(() => {
+      if (t > 0) t--;
+      tEl.textContent = `${String(Math.floor(t/60)).padStart(2,'0')}:${String(t%60).padStart(2,'0')}`;
+    }, 1000);
+
+    // ── AUTH MODAL ──
+    function openAuth(tab) {
+      document.getElementById('authOverlay').classList.add('open');
+      switchAuthTab(tab);
+    }
+    function closeAuth() { document.getElementById('authOverlay').classList.remove('open'); }
+    document.getElementById('authOverlay').addEventListener('click', e => { if (e.target.id === 'authOverlay') closeAuth(); });
+
+    function switchAuthTab(tab) {
+      document.getElementById('signupForm').style.display = tab === 'signup' ? 'block' : 'none';
+      document.getElementById('loginForm').style.display  = tab === 'login'  ? 'block' : 'none';
+      document.getElementById('tabSignup').className = 'auth-tab' + (tab === 'signup' ? ' active' : '');
+      document.getElementById('tabLogin').className  = 'auth-tab' + (tab === 'login'  ? ' active' : '');
+    }
+
+    function showMsg(id, text, type) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = `auth-msg ${type}`;
+    }
+
+    // ── SIGN UP ──
+    async function handleSignup() {
+      const username = document.getElementById('signupUsername').value.trim();
+      const email    = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+      const btn      = document.getElementById('signupBtn');
+
+      if (!username || username.length < 3) return showMsg('signupMsg', 'Username must be at least 3 characters.', 'error');
+      if (!email)    return showMsg('signupMsg', 'Please enter your email.', 'error');
+      if (password.length < 8) return showMsg('signupMsg', 'Password must be at least 8 characters.', 'error');
+
+      btn.disabled = true;
+      btn.textContent = 'Creating account...';
+
+      const { data, error } = await sb.auth.signUp({
+        email, password,
+        options: { data: { username } }
+      });
+
+      if (error) {
+        showMsg('signupMsg', error.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Create Account →';
+        return;
+      }
+
+      // Create profile row in our profiles table
+      if (data.user) {
+        await sb.from('profiles').upsert({
+          id: data.user.id,
+          username,
+          elo: 1000,
+          wins: 0,
+          losses: 0,
+          rank_tier: 'Bronze'
+        });
+      }
+
+      showMsg('signupMsg', '✅ Account created! Check your email to confirm, then log in.', 'success');
+      btn.textContent = 'Account Created!';
+    }
+
+    // ── LOG IN ──
+    async function handleLogin() {
+      const email    = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+      const btn      = document.getElementById('loginBtn');
+
+      if (!email || !password) return showMsg('loginMsg', 'Please fill in all fields.', 'error');
+
+      btn.disabled = true;
+      btn.textContent = 'Logging in...';
+
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        showMsg('loginMsg', error.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Log In →';
+        return;
+      }
+
+      // Redirect to dashboard
+      window.location.href = 'dashboard.html';
+    }
+
+    // Allow Enter key to submit
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      const signupVisible = document.getElementById('signupForm').style.display !== 'none';
+      if (document.getElementById('authOverlay').classList.contains('open')) {
+        signupVisible ? handleSignup() : handleLogin();
+      }
+    });
+  </script>
+</body>
+</html>
